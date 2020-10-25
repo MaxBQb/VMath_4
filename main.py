@@ -434,15 +434,8 @@ class GaussMethod(SumMethod):
             self.rez = Decimal("0")
 
         def steps(self):
-            hide_n = self.method.n - 4
-            if hide_n:
-                print(f"\t[i = 1..{hide_n + 2}]: рассчитаны ранее")
-                SumMethod.generate_log = False
             for i in range(1, self.method.n+1):
-                if i > hide_n + 2:
-                    SumMethod.generate_log = True
-                if SumMethod.generate_log:
-                    print(f"\t[i = {i}]:")
+                print(f"\t[i = {i}]:")
                 self.rez += self.step(i)
 
         def step(self, i: int):
