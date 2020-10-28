@@ -156,25 +156,39 @@ class SumMethod:
             level=2,
             only_compute=False,
             ignore_duplicates=False,
+            wrap_on_length=50,
             **params) -> Decimal:
+
         solv = expr.get_local(**params).split(' = ', 2)[0]
         ans = expr.get_last_execution_result()
-        if not only_compute:
-            s = level * '\t' + f"{name} = "
-            if not ignore_duplicates and expr.is_last_execution_duplicated():
-                print(f"{s}{ans} (раcсчитано ранее)")
-                return ans
-            if show_full:
-                s += f"{expr.get_unified()} = "
-            print(s, end='' if len(s) <= 20 else '\n')
-            s2 = ""
-            if len(s) > 20:
-                s2 += level * '\t' + len(name) * ' ' + ' = '
-            s2 += solv + ' = '
-            print(s2, end='' if len(s2) <= 30 else '\n')
-            if len(s2) > 30:
-                print(level * '\t' + len(name) * ' ' + ' = ', end='')
-            print(ans)
+        if only_compute:
+            return ans
+
+        def part_print(first: str, *others: str, max_len=wrap_on_length):
+            indent = level * '\t'
+            line_starts = '\n' + indent + ' ' * len(first) + ' ='
+            str_l = 0
+            print(indent+first, end='')
+            str_l = len(indent)+len(first)
+            ignore_length = True
+            for e in others:
+                print(end=" = ")
+                str_l += 3
+                if not ignore_length and len(e)+str_l > max_len:
+                    print(line_starts, e, end='')
+                    str_l = len(line_starts)+len(e)
+                else:
+                    ignore_length = False
+                    print(e, end='')
+                    str_l += len(e)
+            print()
+
+        if not ignore_duplicates and expr.is_last_execution_duplicated():
+            part_print(name, f"{ans} (раcсчитано ранее)")
+        elif show_full:
+            part_print(name, expr.get_unified(), solv, str(ans))
+        else:
+            part_print(name, solv, str(ans))
         return ans
 
     class _Stage:
