@@ -28,24 +28,42 @@ class Expression:
             for e in self._static_vars:
                 if e not in self._var_nicknames:
                     self._dynamic_var_names[e] = e
-
+        self.computed = dict()
+        self._last_execution_result = None
+        self._last_exec_duplicated = False
         self.post_init()
 
     def post_init(self):
         pass
 
-    def execute(self, **dynamic):
+    def get_last_execution_result(self):
+        return self._last_execution_result
+
+    def is_last_execution_duplicated(self) -> bool:
+        return self._last_exec_duplicated
+
+    def execute(self,
+                ignore_duplicates=True,
+                **dynamic):
         for var in self._dynamic_vars:
             if var not in dynamic:
                 raise ValueError(f"No such variable {var}")
-        return self._f(**dynamic, **self._static_vars)
+        res = self._f(**dynamic, **self._static_vars)
+        self._last_execution_result = res
+        self._last_exec_duplicated = False
+        if res in self.computed and self.computed[res] == dynamic:
+            self._last_exec_duplicated = True
+            if not ignore_duplicates:
+                print(f"DUPLICATE")
+        else:
+            self.computed[res] = dynamic
+        return res
 
     def _f(self, x, **kw):
         return x
 
     def compile(self, no_edit=False, include_static=True, **kwargs):
         if not no_edit:
-            from re import sub
             for e in kwargs:
                 if str(kwargs[e]).startswith('-'):
                     kwargs[e] = f"({str(kwargs[e])})"
@@ -83,7 +101,6 @@ class MainExpr(Expression):
 
 class SumMethod:
     _method_name = "basic method"
-    generate_log = True
 
     def __init__(self, expr: Expression,
                  lbound: Decimal,
@@ -138,22 +155,27 @@ class SumMethod:
             show_full=False,
             level=2,
             only_compute=False,
+            ignore_duplicates=False,
             **params) -> Decimal:
-        if SumMethod.generate_log and not only_compute:
+        solv = expr.get_local(**params).split(' = ', 2)[0]
+        ans = expr.get_last_execution_result()
+        if not only_compute:
             s = level * '\t' + f"{name} = "
+            if not ignore_duplicates and expr.is_last_execution_duplicated():
+                print(f"{s}{ans} (раcсчитано ранее)")
+                return ans
             if show_full:
                 s += f"{expr.get_unified()} = "
             print(s, end='' if len(s) <= 20 else '\n')
             s2 = ""
             if len(s) > 20:
-                s2 += level * '\t' + len(name)*' ' + ' = '
-            solv, ans = expr.get_local(**params).split(' = ', 2)
-            s2 += solv+' = '
+                s2 += level * '\t' + len(name) * ' ' + ' = '
+            s2 += solv + ' = '
             print(s2, end='' if len(s2) <= 30 else '\n')
             if len(s2) > 30:
-                print(level * '\t' + len(name)*' ' + ' = ', end='')
+                print(level * '\t' + len(name) * ' ' + ' = ', end='')
             print(ans)
-        return expr.execute(**params)
+        return ans
 
     class _Stage:
         stage_name = "basic stage"
@@ -226,15 +248,8 @@ class TrapeziumMethod(SumMethod):
             self.rez = Decimal("0")
 
         def steps(self):
-            hide_n = self.method.n - 4
-            if hide_n:
-                print(f"\t[i = 1..{hide_n+1}]: рассчитаны ранее")
-                SumMethod.generate_log = False
             for i in range(1, self.method.n):
-                if i > hide_n+1:
-                    SumMethod.generate_log = True
-                if SumMethod.generate_log:
-                    print(f"\t[i = {i}]:")
+                print(f"\t[i = {i}]:")
                 self.rez += self.step(i)
 
         def step(self, i: int):
@@ -331,30 +346,16 @@ class SimpsonMethod(TrapeziumMethod):
         stage_name = "Рассчитаем ∑[1..n)f(x_even)"
 
         def steps(self):
-            hide_n = self.method.n - 4
-            if hide_n:
-                print(f"\t[i = 1..{hide_n + 1}]: рассчитаны ранее")
-                SumMethod.generate_log = False
             for i in range(1, self.method.n):
-                if i > hide_n + 1:
-                    SumMethod.generate_log = True
-                if SumMethod.generate_log:
-                    print(f"\t[i = {i}]:")
-                self.rez += self.step(i*2)
+                print(f"\t[i = {i}]:")
+                self.rez += self.step(i * 2)
 
     class _SumOddStage(_SumEvenStage):
         stage_name = "Рассчитаем ∑[1..n]f(x_odd)"
 
         def steps(self):
-            hide_n = self.method.n - 4
-            if hide_n:
-                print(f"\t[i = 1..{hide_n + 2}]: рассчитаны ранее")
-                SumMethod.generate_log = False
             for i in range(1, self.method.n + 1):
-                if i > hide_n + 2:
-                    SumMethod.generate_log = True
-                if SumMethod.generate_log:
-                    print(f"\t[i = {i}]:")
+                print(f"\t[i = {i}]:")
                 self.rez += self.step(i * 2 - 1)
 
     class _EndStage(TrapeziumMethod._EndStage):
@@ -405,7 +406,7 @@ class GaussMethod(SumMethod):
     @staticmethod
     def HT(i, n):
         a, b = [[(Decimal("0.861136"), Decimal("0.347854")),
-                (Decimal("0.339981"), Decimal("0.652145"))],
+                 (Decimal("0.339981"), Decimal("0.652145"))],
                 [(Decimal("0.932464"), Decimal("0.171324")),
                  (Decimal("0.661209"), Decimal("0.360761")),
                  (Decimal("0.238619"), Decimal("0.467913"))],
@@ -413,8 +414,8 @@ class GaussMethod(SumMethod):
                  (Decimal("0.796666"), Decimal("0.222381")),
                  (Decimal("0.525532"), Decimal("0.313706")),
                  (Decimal("0.183434"), Decimal("0.362683"))]
-        ][n//2-2][i-1 if i <= n//2 else n-i]
-        return -a if i <= n//2 else a, b
+                ][n // 2 - 2][i - 1 if i <= n // 2 else n - i]
+        return -a if i <= n // 2 else a, b
 
     def get_stages(self):
         return [
@@ -434,7 +435,7 @@ class GaussMethod(SumMethod):
             self.rez = Decimal("0")
 
         def steps(self):
-            for i in range(1, self.method.n+1):
+            for i in range(1, self.method.n + 1):
                 print(f"\t[i = {i}]:")
                 self.rez += self.step(i)
 
@@ -460,7 +461,7 @@ class GaussMethod(SumMethod):
             _dynamic_vars = ['t']
 
             def _f(self, t: Decimal, a: Decimal, b: Decimal, **kwargs):
-                return (a+b)/Decimal("2") + ((b-a)*t)/Decimal("2")
+                return (a + b) / Decimal("2") + ((b - a) * t) / Decimal("2")
 
         class _AF_Expression(StaticExpression):
             _str_repr = "{A}*{f_x}"
@@ -470,7 +471,7 @@ class GaussMethod(SumMethod):
             }
 
             def _f(self, A: Decimal, f_x: Decimal, **kwargs):
-                return A*f_x
+                return A * f_x
 
     class _EndStage(SumMethod._Stage):
         stage_name = "Рассчитываем конечную сумму I"
@@ -503,7 +504,7 @@ class GaussMethod(SumMethod):
                    b: Decimal,
                    sum_af_x: Decimal,
                    **kwargs):
-                return ((b-a)*sum_af_x)/Decimal("2")
+                return ((b - a) * sum_af_x) / Decimal("2")
 
 
 def main():
