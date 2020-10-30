@@ -136,7 +136,7 @@ class SumMethod:
 
     def run(self):
         if not self.suppres_info:
-            print(f"Рассчёт суммы на [{self.lbound}; {self.rbound}], {self._method_name} при n = {self.n}:")
+            print(f"Расчёт суммы на [{self.lbound}; {self.rbound}], {self._method_name} при n = {self.n}:")
 
         for i, stage in enumerate(self.get_stages(), 1):
             if not issubclass(stage, SumMethod._Stage):
