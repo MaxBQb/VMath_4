@@ -1,6 +1,19 @@
 from decimal import Decimal
 
 
+def make_subscript(x: str) -> str:
+    replaces = {
+        '1': '₁', '2': '₂', '3': '₃', '4': '₄',
+        '5': '₅', '6': '₆', '7': '₇', '8': '₈',
+        '9': '₉', '0': '₀', '+': '₊', '-': '₋',
+        'i': 'ᵢ', 'n': 'ₙ', 'm': 'ₘ', 'k': 'ₖ',
+        '(': '₍', ')': '₎',
+    }
+    for f, t in replaces.items():
+        x = x.replace(f, t)
+    return x
+
+
 class Expression:
     _str_repr = "{x}"
     _static_vars = dict()
@@ -251,7 +264,7 @@ class TrapeziumMethod(SumMethod):
                 return (b - a) / n
 
     class _SumStage(SumMethod._Stage):
-        stage_name = "Рассчитаем ∑[1..n)f(x)"
+        stage_name = "Рассчитаем ∑[1..n)f(xᵢ)"
 
         def __init__(self, method: SumMethod):
             super().__init__(method)
@@ -269,10 +282,10 @@ class TrapeziumMethod(SumMethod):
         def step(self, i: int):
             return SumMethod.compute_with_logging(
                 self.method.expr,
-                "f(x)",
+                f"f(x{make_subscript(str(i))})",
                 x=SumMethod.compute_with_logging(
                     self.xExpr,
-                    'x', True,
+                    'x'+make_subscript(str(i)), True,
                     i=i
                 )
             )
@@ -357,7 +370,7 @@ class SimpsonMethod(TrapeziumMethod):
                 return (b - a) / (2 * n)
 
     class _SumEvenStage(TrapeziumMethod._SumStage):
-        stage_name = "Рассчитаем ∑[1..n)f(x_even)"
+        stage_name = f"Рассчитаем ∑[1..n)f(x{make_subscript('2i')})"
 
         def steps(self):
             for i in range(1, self.method.n):
@@ -365,7 +378,7 @@ class SimpsonMethod(TrapeziumMethod):
                 self.rez += self.step(i * 2)
 
     class _SumOddStage(_SumEvenStage):
-        stage_name = "Рассчитаем ∑[1..n]f(x_odd)"
+        stage_name = f"Рассчитаем ∑[1..n]f(x{make_subscript('(2i-1)')})"
 
         def steps(self):
             for i in range(1, self.method.n + 1):
@@ -379,13 +392,13 @@ class SimpsonMethod(TrapeziumMethod):
                     self.method.expr,
                     "f(a)",
                     x=self.method.lbound,
-                    only_compute=(self.method.n != 4)
+                    only_compute=True
                 ),
                 f_b=SumMethod.compute_with_logging(
                     self.method.expr,
                     "f(b)",
                     x=self.method.rbound,
-                    only_compute=(self.method.n != 4)
+                    only_compute=True
                 ),
                 sum_f_x2=self.method.stages_results[1],
                 sum_f_x1=self.method.stages_results[2],
@@ -438,7 +451,7 @@ class GaussMethod(SumMethod):
         ]
 
     class _SumStage(SumMethod._Stage):
-        stage_name = "Рассчитаем ∑[1..n](Ai*f(x))"
+        stage_name = "Рассчитаем ∑[1..n](Aᵢ*f(xᵢ))"
 
         def __init__(self, method: SumMethod):
             super().__init__(method)
@@ -459,20 +472,21 @@ class GaussMethod(SumMethod):
                     A=GaussMethod.HT(i, self.method.n)[1],
                     f_x=SumMethod.compute_with_logging(
                         self.method.expr,
-                        "f(x)",
+                        f"f(x{make_subscript(str(i))})",
                         x=SumMethod.compute_with_logging(
                             self.xExpr,
-                            'x', True,
+                            'x'+make_subscript(str(i)), True,
                             t=GaussMethod.HT(i, self.method.n)[0]
                         )
                     )
                 ),
-                "A*f(x)"
+                f"A{make_subscript(str(i))}*f(x{make_subscript(str(i))})"
             )
 
         class _Xi_Expression(StaticExpression):
             _str_repr = "({a}+{b})/2 + (({b}-{a})*{t})/2"
             _dynamic_vars = ['t']
+            _var_nicknames = {'t':'tᵢ'}
 
             def _f(self, t: Decimal, a: Decimal, b: Decimal, **kwargs):
                 return (a + b) / Decimal("2") + ((b - a) * t) / Decimal("2")
@@ -480,7 +494,7 @@ class GaussMethod(SumMethod):
         class _AF_Expression(StaticExpression):
             _str_repr = "{A}*{f_x}"
             _var_nicknames = {
-                'A': 'A(i)',
+                'A': 'Aᵢ',
                 'f_x': 'f(x)',
             }
 
@@ -562,6 +576,9 @@ def main():
     for k, v in result.items():
         x.add_row([k, *v])
     print(x)
+    from urllib.parse import quote
+    print('Проверить можно здесь:')
+    print(f"https://www.wolframalpha.com/input/?i={quote('('+expr.get_unified() + f')dx from {a} to {b}')}")
 
 
 if __name__ == '__main__':
